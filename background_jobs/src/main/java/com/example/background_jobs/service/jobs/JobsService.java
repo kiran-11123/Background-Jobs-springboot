@@ -1,5 +1,6 @@
 package com.example.background_jobs.service.jobs;
 import com.example.background_jobs.entity.Jobs;
+import com.example.background_jobs.exception.jobs.JobNotFoundException;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -57,9 +58,10 @@ public class JobsService {
 
            }
            catch(Exception e){
-              log.error("Error while creating job", e);
 
-              throw new RuntimeException("Failed to create job");
+              log.error("ERROR WHILE CREATING JOB", e);
+
+        throw e;
            }
     }
 
@@ -68,10 +70,13 @@ public class JobsService {
         try{
 
             Jobs job = jobsRespository.findById(jobId).orElseThrow(()->
-                new RuntimeException("Job not found with Id : " + jobId)
+                new JobNotFoundException("Job not found with Id : " + jobId)
             );
 
             return convertToResponse(job);
+        }
+        catch(JobNotFoundException e){
+            throw e;
         }
         catch(Exception e){
 
