@@ -13,9 +13,8 @@ import com.example.background_jobs.dto.jobs.JobResponse;
 import com.example.background_jobs.entity.Job_status;
 
 import com.example.background_jobs.repository.JobsRespository;
-
 import lombok.extern.slf4j.Slf4j;
-
+import  com.example.background_jobs.service.kafka.JobProducer;
 
 
 @Service 
@@ -23,9 +22,11 @@ import lombok.extern.slf4j.Slf4j;
 public class JobsService {
 
     private JobsRespository jobsRespository;
+    private JobProducer jobProducer;
 
-    public  JobsService(JobsRespository jobsRespository){
+    public  JobsService(JobsRespository jobsRespository , JobProducer jobProducer){
         this.jobsRespository = jobsRespository;
+        this.jobProducer = jobProducer;
     }
 
 
@@ -50,8 +51,10 @@ public class JobsService {
                            .updatedAt(LocalDateTime.now())
                            .build();
 
-                Jobs savedJob = jobsRespository.save(job);
+            Jobs savedJob = jobsRespository.save(job);
+            jobProducer.sendJob(savedJob.getId());
 
+            log.info("Job with Job Id {} added into kafka" , savedJob.getId());
             log.info("Job created successfully. Job ID: {}", savedJob.getId());
 
             return convertToResponse(savedJob);
@@ -89,6 +92,58 @@ public class JobsService {
 
 
     public void processJob(UUID jobId){
-         
+           
+      try{
+
+      
+        Jobs job = jobsRespository.findById(jobId).orElseThrow(()->new JobNotFoundException("Job Not found" + jobId));
+        
+         log.info("Processing job: {}", jobId);
+
+        job.setStatus(Job_status.PROCESSING);
+        job.setAttempts(job.getAttempts() + 1);
+        job.setUpdatedAt(LocalDateTime.now());
+        jobsRespository.save(job);
+
+
+        try{
+
+            Thread.sleep(10);
+
+            job.setStatus(Job_status.COMPLETED);
+            job.setUpdatedAt(LocalDateTime.now());
+
+              log.info(
+                "Job completed successfully. Job ID: {}",
+                jobId
+        );
+
+
+
+        }
+        catch(Exception e){
+
+             log.error(
+                "Job processing failed. Job ID: {}",
+                jobId,
+                e
+        );
+            
+            job.setStatus(Job_status.FAILED);
+            job.setUpdatedAt(LocalDateTime.now());
+
+        }
+
+        
+
+      }
+      catch(JobNotFoundException e){
+        throw e;
+      }
+      catch(Exception e){
+         log.info("Error while processing the job");
+         throw e;
+      }
+
     }
 }
